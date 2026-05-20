@@ -17,37 +17,55 @@ export type ModalData =
   | { kind: "pokemon-card"; card: PokemonCard }
   | { kind: "pokemon-figure"; figure: PokemonFigure };
 
-// Deterministic seeded RNG
+// Deterministic seeded RNG (xorshift32)
 function rng(seed: number) {
-  let s = (Math.abs(Math.floor(seed)) % 233280) || 42;
-  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  let s = (Math.abs(Math.floor(seed)) >>> 0) || 2463534242;
+  return () => {
+    s ^= s << 13; s ^= s >>> 17; s ^= s << 5;
+    return (s >>> 0) / 4294967296;
+  };
 }
 
+// String → stable numeric seed
+function hashStr(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h * 16777619) >>> 0;
+  }
+  return h;
+}
+
+// Geometric Brownian Motion chart anchored to endPrice at the last day
 function buildChartData(seed: number, endPrice: number, days = 30, volatility = 0.035, baseVolume = 0): ChartPoint[] {
   const rand = rng(seed);
+
+  // Random overall trend direction so charts aren't all upward
+  const drift = (rand() - 0.5) * 0.006;
+
+  // Generate log-returns forward (use sum-of-3 uniforms ≈ normal)
+  const logReturns: number[] = [];
+  for (let i = 0; i < days - 1; i++) {
+    const shock = (rand() + rand() + rand() - 1.5) * volatility * 2.45;
+    logReturns.push(drift + shock);
+  }
+
+  // Build cumulative log prices; shift so last = 0 → last price = endPrice
+  let cum = 0;
+  const cums = [0, ...logReturns.map(r => { cum += r; return cum; })];
+  const lastCum = cums[cums.length - 1];
+
   const today = new Date();
   today.setHours(12, 0, 0, 0);
 
-  let price = endPrice;
-  const revPrices: number[] = [price];
-  const revVols: number[] = [baseVolume * (0.7 + rand() * 0.6)];
-
-  for (let i = 1; i < days; i++) {
-    price = price / (1 + (rand() - 0.48) * 2 * volatility);
-    revPrices.push(Math.max(price, 0.000001));
-    revVols.push(baseVolume * (0.5 + rand() * 1.0));
-  }
-
-  revPrices.reverse();
-  revVols.reverse();
-
-  return revPrices.map((v, i) => {
+  return cums.map((c, i) => {
     const d = new Date(today);
     d.setDate(d.getDate() - (days - 1 - i));
+    const vol = baseVolume > 0 ? baseVolume * (0.4 + rand() * 1.2) : undefined;
     return {
       time: d.toISOString().slice(0, 10),
-      value: v,
-      volume: baseVolume > 0 ? revVols[i] : undefined,
+      value: Math.max(endPrice * Math.exp(c - lastCum), 0.000001),
+      volume: vol,
     };
   });
 }
@@ -80,6 +98,7 @@ interface ModalContent {
   currentValue: string;
   change30d: number;
   coingeckoId?: string;
+  yahooSymbol?: string;
   staticData?: ChartPoint[];
   stats: StatItem[];
 }
@@ -88,7 +107,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
   switch (data.kind) {
     case "crypto": {
       const { asset } = data;
-      const seed = Math.floor(asset.price * 7.3) + asset.ticker.charCodeAt(0) * 31;
+      const seed = hashStr(asset.name + asset.ticker);
       const fallback = buildChartData(seed, asset.price, 30, 0.05, asset.price * 1e8);
       const change30d = ((fallback[fallback.length - 1].value - fallback[0].value) / fallback[0].value) * 100;
       return {
@@ -114,7 +133,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
       const { skin } = data;
       const price = overridePrice ?? skin.price;
       const rColor = cs2RarityColors[skin.rarity];
-      const seed = Math.floor(skin.price * 13.7) + skin.id.length * 17;
+      const seed = hashStr(skin.weaponName + skin.skinName + skin.wear);
       const staticData = buildChartData(seed, price, 30, 0.03);
       const change30d = ((staticData[staticData.length - 1].value - staticData[0].value) / staticData[0].value) * 100;
       return {
@@ -137,7 +156,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
     }
     case "cs2case": {
       const { cs2case } = data;
-      const seed = Math.floor(cs2case.price * 17) + cs2case.quantity * 100;
+      const seed = hashStr(cs2case.name);
       const staticData = buildChartData(seed, cs2case.price, 30, 0.04);
       const change30d = ((staticData[staticData.length - 1].value - staticData[0].value) / staticData[0].value) * 100;
       return {
@@ -160,7 +179,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
       const { item } = data;
       const spot = metalSpotPerGram[item.metal] || 65.32;
       const mColor = metalColors[item.metal] || "#f5c542";
-      const seed = Math.floor(item.weightGrams * item.purity) + item.id.length;
+      const seed = hashStr(item.name + item.metal + String(item.weightGrams));
       const staticData = buildChartData(seed, spot, 30, 0.012);
       const change30d = ((staticData[staticData.length - 1].value - staticData[0].value) / staticData[0].value) * 100;
       return {
@@ -184,7 +203,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
     case "pokemon-card": {
       const { card } = data;
       const rColor = pkRarityColors[card.rarity];
-      const seed = Math.floor(card.value * 11.3) + card.id.length * 7;
+      const seed = hashStr(card.name + card.set + card.rarity);
       const staticData = buildChartData(seed, card.value, 30, 0.015);
       const change30d = ((staticData[staticData.length - 1].value - staticData[0].value) / staticData[0].value) * 100;
       return {
@@ -206,7 +225,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
     }
     case "pokemon-figure": {
       const { figure } = data;
-      const seed = Math.floor(figure.value * 7.7) + figure.id.length * 11;
+      const seed = hashStr(figure.name + figure.size + figure.condition);
       const staticData = buildChartData(seed, figure.value, 30, 0.015);
       const change30d = ((staticData[staticData.length - 1].value - staticData[0].value) / staticData[0].value) * 100;
       return {
@@ -227,7 +246,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
     }
     case "stock": {
       const { stock } = data;
-      const seed = Math.floor(stock.price * 11.9) + stock.ticker.charCodeAt(0) * 23;
+      const seed = hashStr(stock.name + stock.ticker);
       const staticData = buildChartData(seed, stock.price, 30, 0.025, stock.price * 2e6);
       const change30d = ((staticData[staticData.length - 1].value - staticData[0].value) / staticData[0].value) * 100;
       const value = stock.shares * stock.price;
@@ -238,6 +257,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
         currentLabel: "SHARE PRICE",
         currentValue: fmt2(stock.price),
         change30d,
+        yahooSymbol: stock.ticker,
         staticData,
         stats: [
           { label: "TICKER", value: stock.ticker, accent: stock.color },
@@ -360,7 +380,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
                   {content.currentLabel}
                 </div>
                 <div style={{ fontFamily: "monospace", fontSize: "1.9rem", fontWeight: 700, color: content.color, lineHeight: 1 }}>
-                  {livePrice !== null && content.coingeckoId ? fmt2(livePrice) : content.currentValue}
+                  {livePrice !== null && (content.coingeckoId || content.yahooSymbol) ? fmt2(livePrice) : content.currentValue}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, paddingBottom: "0.2rem" }}>
@@ -370,7 +390,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
                 <span style={{ fontFamily: "monospace", fontSize: "0.72rem", color: content.change30d >= 0 ? "#22c55e" : "#ef4444" }}>
                   {fmtPct(content.change30d)} 30d
                 </span>
-                {(content.coingeckoId || steamPrice !== null) && (
+                {(content.coingeckoId || content.yahooSymbol || steamPrice !== null) && (
                   <span style={{ fontFamily: "monospace", fontSize: "0.52rem", color: "rgba(224,224,224,0.22)", marginLeft: 8, letterSpacing: "0.1em" }}>
                     LIVE
                   </span>
@@ -388,7 +408,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
               overflow: "hidden",
             }}>
               <div style={{ fontFamily: "monospace", fontSize: "0.52rem", color: "rgba(224,224,224,0.25)", letterSpacing: "0.14em", marginBottom: "0.5rem" }}>
-                {content.coingeckoId
+                {content.coingeckoId || content.yahooSymbol
                 ? "30D PRICE · LIVE · SCROLL TO ZOOM"
                 : steamPrice !== null
                 ? "30D ESTIMATE · LIVE ENDPOINT · SCROLL TO ZOOM"
@@ -397,6 +417,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
               <TradingChart
                 key={content.title + content.subtitle}
                 coingeckoId={content.coingeckoId}
+                yahooSymbol={content.yahooSymbol}
                 staticData={content.staticData}
                 color={content.color}
                 height={260}

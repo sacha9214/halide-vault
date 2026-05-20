@@ -21,6 +21,7 @@ export interface ChartPoint {
 
 interface TradingChartProps {
   coingeckoId?: string;
+  yahooSymbol?: string;
   staticData?: ChartPoint[];
   color: string;
   height?: number;
@@ -30,6 +31,20 @@ interface TradingChartProps {
 
 const cache = new Map<string, { data: ChartPoint[]; exp: number }>();
 const TTL = 5 * 60 * 1000;
+
+async function loadStockData(ticker: string): Promise<ChartPoint[]> {
+  const key = `stock:${ticker}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() < hit.exp) return hit.data;
+
+  const res = await fetch(`/api/stockchart?ticker=${encodeURIComponent(ticker)}`);
+  if (!res.ok) throw new Error(`${res.status}`);
+  const data: ChartPoint[] = await res.json();
+  if (data.length === 0) throw new Error("empty");
+
+  cache.set(key, { data, exp: Date.now() + TTL });
+  return data;
+}
 
 async function loadCryptoData(id: string): Promise<ChartPoint[]> {
   const hit = cache.get(id);
@@ -49,23 +64,23 @@ function fmtTooltipPrice(v: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 4, maximumFractionDigits: 6 }).format(v);
 }
 
-export function TradingChart({ coingeckoId, staticData, color, height = 280, currentPrice, onPriceLoad }: TradingChartProps) {
+export function TradingChart({ coingeckoId, yahooSymbol, staticData, color, height = 280, currentPrice, onPriceLoad }: TradingChartProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const chartDivRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const areaRef = useRef<ISeriesApi<SeriesType> | null>(null);
 
-  const [loading, setLoading] = useState(!!coingeckoId);
+  const [loading, setLoading] = useState(!!(coingeckoId || yahooSymbol));
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ChartPoint[]>(staticData ?? []);
 
   // Sync static data when prop changes (e.g. different card opened without full remount)
   useEffect(() => {
-    if (!coingeckoId && staticData && staticData.length > 0) {
+    if (!coingeckoId && !yahooSymbol && staticData && staticData.length > 0) {
       setData(staticData);
     }
-  }, [staticData, coingeckoId]);
+  }, [staticData, coingeckoId, yahooSymbol]);
 
   // Fetch crypto data
   useEffect(() => {
@@ -78,8 +93,22 @@ export function TradingChart({ coingeckoId, staticData, color, height = 280, cur
         setLoading(false);
         if (onPriceLoad && d.length > 0) onPriceLoad(d[d.length - 1].value);
       })
-      .catch(e => { setError("Real-time data unavailable"); setLoading(false); });
+      .catch(() => { setError("Real-time data unavailable"); setLoading(false); });
   }, [coingeckoId]);
+
+  // Fetch stock data from Yahoo Finance
+  useEffect(() => {
+    if (!yahooSymbol) return;
+    setLoading(true);
+    setError(null);
+    loadStockData(yahooSymbol)
+      .then(d => {
+        setData(d);
+        setLoading(false);
+        if (onPriceLoad && d.length > 0) onPriceLoad(d[d.length - 1].value);
+      })
+      .catch(() => { setError("Real-time data unavailable"); setLoading(false); });
+  }, [yahooSymbol]);
 
   // Build chart
   useEffect(() => {
