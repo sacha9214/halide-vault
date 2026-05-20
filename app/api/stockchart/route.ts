@@ -22,6 +22,10 @@ function httpsGet(url: string): Promise<string> {
   });
 }
 
+// Precious metal futures are quoted in USD per troy oz — convert to USD per gram
+const GRAMS_PER_TROY_OZ = 31.1034768;
+const METAL_FUTURES = new Set(["GC=F", "SI=F", "PL=F", "PA=F"]);
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const ticker = (searchParams.get("ticker") ?? "").trim().toUpperCase();
@@ -41,14 +45,18 @@ export async function GET(req: Request) {
     const timestamps: number[] = result.timestamp ?? [];
     const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
     const volumes: number[] = result.indicators?.quote?.[0]?.volume ?? [];
+    const isMetal = METAL_FUTURES.has(ticker);
 
     const seen = new Set<string>();
     const data: ChartPoint[] = timestamps
-      .map((ts, i) => ({
-        time: new Date(ts * 1000).toISOString().slice(0, 10),
-        value: closes[i] ?? 0,
-        volume: volumes[i] ?? 0,
-      }))
+      .map((ts, i) => {
+        const raw = closes[i] ?? 0;
+        return {
+          time: new Date(ts * 1000).toISOString().slice(0, 10),
+          value: isMetal ? raw / GRAMS_PER_TROY_OZ : raw,
+          volume: volumes[i] ?? 0,
+        };
+      })
       .filter((d) => {
         if (d.value <= 0 || seen.has(d.time)) return false;
         seen.add(d.time);

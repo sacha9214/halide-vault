@@ -176,6 +176,9 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
       };
     }
     case "gold": {
+      const metalFutures: Record<string, string> = {
+        gold: "GC=F", silver: "SI=F", platinum: "PL=F", palladium: "PA=F",
+      };
       const { item } = data;
       const spot = metalSpotPerGram[item.metal] || 65.32;
       const mColor = metalColors[item.metal] || "#f5c542";
@@ -189,6 +192,7 @@ function buildContent(data: ModalData, overridePrice?: number): ModalContent {
         currentLabel: "SPOT / GRAM",
         currentValue: fmt2(spot),
         change30d,
+        yahooSymbol: metalFutures[item.metal],
         staticData,
         stats: [
           { label: "METAL", value: item.metal.charAt(0).toUpperCase() + item.metal.slice(1) },
