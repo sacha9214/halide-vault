@@ -84,7 +84,7 @@ interface ModalContent {
   stats: StatItem[];
 }
 
-function buildContent(data: ModalData): ModalContent {
+function buildContent(data: ModalData, overridePrice?: number): ModalContent {
   switch (data.kind) {
     case "crypto": {
       const { asset } = data;
@@ -112,16 +112,17 @@ function buildContent(data: ModalData): ModalContent {
     }
     case "cs2skin": {
       const { skin } = data;
+      const price = overridePrice ?? skin.price;
       const rColor = cs2RarityColors[skin.rarity];
       const seed = Math.floor(skin.price * 13.7) + skin.id.length * 17;
-      const staticData = buildChartData(seed, skin.price, 30, 0.03);
+      const staticData = buildChartData(seed, price, 30, 0.03);
       const change30d = ((staticData[staticData.length - 1].value - staticData[0].value) / staticData[0].value) * 100;
       return {
         color: rColor,
         title: skin.skinName,
         subtitle: `${skin.weaponName} · ${skin.rarity.toUpperCase()}`,
         currentLabel: "STEAM MARKET",
-        currentValue: fmt2(skin.price),
+        currentValue: fmt2(price),
         change30d,
         staticData,
         stats: [
@@ -130,7 +131,7 @@ function buildContent(data: ModalData): ModalContent {
           { label: "WEAR", value: cs2WearLabels[skin.wear] },
           { label: "FLOAT", value: skin.float.toFixed(4) },
           { label: "30D CHANGE", value: fmtPct(change30d), accent: change30d >= 0 ? "#22c55e" : "#ef4444" },
-          { label: "MARKET", value: fmt2(skin.price), accent: "#f97316" },
+          { label: "MARKET", value: fmt2(price), accent: "#f97316" },
         ],
       };
     }
@@ -269,9 +270,22 @@ function Stat({ label, value, accent }: StatItem) {
 export function DetailModal({ data, onClose }: { data: ModalData | null; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
   const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [steamPrice, setSteamPrice] = useState<number | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
-  useEffect(() => { setLivePrice(null); }, [data]);
+  useEffect(() => {
+    setLivePrice(null);
+    setSteamPrice(null);
+    if (!data || data.kind !== "cs2skin") return;
+    const { skin } = data;
+    const wearLabel = cs2WearLabels[skin.wear];
+    const prefix = skin.rarity === "Knife" ? "★ " : "";
+    const hashName = `${prefix}${skin.weaponName} | ${skin.skinName} (${wearLabel})`;
+    fetch(`/api/cs2prices?name=${encodeURIComponent(hashName)}`)
+      .then(r => r.json())
+      .then(result => { if (typeof result[hashName] === "number") setSteamPrice(result[hashName]); })
+      .catch(() => {});
+  }, [data]);
 
   useEffect(() => {
     if (!data) return;
@@ -280,7 +294,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
     return () => window.removeEventListener("keydown", onKey);
   }, [data, onClose]);
 
-  const content = data ? buildContent(data) : null;
+  const content = data ? buildContent(data, steamPrice ?? undefined) : null;
 
   const modal = (
     <AnimatePresence>
@@ -356,7 +370,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
                 <span style={{ fontFamily: "monospace", fontSize: "0.72rem", color: content.change30d >= 0 ? "#22c55e" : "#ef4444" }}>
                   {fmtPct(content.change30d)} 30d
                 </span>
-                {content.coingeckoId && (
+                {(content.coingeckoId || steamPrice !== null) && (
                   <span style={{ fontFamily: "monospace", fontSize: "0.52rem", color: "rgba(224,224,224,0.22)", marginLeft: 8, letterSpacing: "0.1em" }}>
                     LIVE
                   </span>
@@ -374,7 +388,11 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
               overflow: "hidden",
             }}>
               <div style={{ fontFamily: "monospace", fontSize: "0.52rem", color: "rgba(224,224,224,0.25)", letterSpacing: "0.14em", marginBottom: "0.5rem" }}>
-                {content.coingeckoId ? "30D PRICE · LIVE · SCROLL TO ZOOM" : "30D PRICE ESTIMATE · SCROLL TO ZOOM"}
+                {content.coingeckoId
+                ? "30D PRICE · LIVE · SCROLL TO ZOOM"
+                : steamPrice !== null
+                ? "30D ESTIMATE · LIVE ENDPOINT · SCROLL TO ZOOM"
+                : "30D PRICE ESTIMATE · SCROLL TO ZOOM"}
               </div>
               <TradingChart
                 key={content.title + content.subtitle}
