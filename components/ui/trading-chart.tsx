@@ -82,32 +82,38 @@ export function TradingChart({ coingeckoId, yahooSymbol, staticData, color, heig
     }
   }, [staticData, coingeckoId, yahooSymbol]);
 
-  // Fetch crypto data
+  // Fetch crypto data — cancelled flag prevents stale fetches from calling onPriceLoad
   useEffect(() => {
     if (!coingeckoId) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
     loadCryptoData(coingeckoId)
       .then(d => {
+        if (cancelled) return;
         setData(d);
         setLoading(false);
         if (onPriceLoad && d.length > 0) onPriceLoad(d[d.length - 1].value);
       })
-      .catch(() => { setError("Real-time data unavailable"); setLoading(false); });
+      .catch(() => { if (!cancelled) { setError("Real-time data unavailable"); setLoading(false); } });
+    return () => { cancelled = true; };
   }, [coingeckoId]);
 
-  // Fetch stock data from Yahoo Finance
+  // Fetch stock / commodity data from Yahoo Finance
   useEffect(() => {
     if (!yahooSymbol) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
     loadStockData(yahooSymbol)
       .then(d => {
+        if (cancelled) return;
         setData(d);
         setLoading(false);
         if (onPriceLoad && d.length > 0) onPriceLoad(d[d.length - 1].value);
       })
-      .catch(() => { setError("Real-time data unavailable"); setLoading(false); });
+      .catch(() => { if (!cancelled) { setError("Real-time data unavailable"); setLoading(false); } });
+    return () => { cancelled = true; };
   }, [yahooSymbol]);
 
   // Build chart

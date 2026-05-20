@@ -7,6 +7,7 @@ import { X, TrendingUp, TrendingDown } from "lucide-react";
 import type { CryptoAsset, CS2Skin, CS2Case, GoldItem, PokemonCard, PokemonFigure, StockAsset } from "@/lib/mock-data";
 import { metalSpotPerGram, metalColors } from "@/lib/mock-data";
 import { TradingChart, type ChartPoint } from "@/components/ui/trading-chart";
+import { usePrices } from "@/lib/price-context";
 
 export type ModalData =
   | { kind: "crypto"; asset: CryptoAsset }
@@ -295,6 +296,15 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
   const [mounted, setMounted] = useState(false);
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [steamPrice, setSteamPrice] = useState<number | null>(null);
+  const { crypto: liveCrypto, stocks: liveStocks } = usePrices();
+
+  // Live price from context — immediate, no chart needed
+  const contextPrice = (() => {
+    if (!data) return null;
+    if (data.kind === "crypto") return liveCrypto[data.asset.coingeckoId]?.price ?? null;
+    if (data.kind === "stock") return liveStocks[data.stock.ticker]?.price ?? null;
+    return null;
+  })();
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
@@ -384,7 +394,11 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
                   {content.currentLabel}
                 </div>
                 <div style={{ fontFamily: "monospace", fontSize: "1.9rem", fontWeight: 700, color: content.color, lineHeight: 1 }}>
-                  {livePrice !== null && (content.coingeckoId || content.yahooSymbol) ? fmt2(livePrice) : content.currentValue}
+                  {livePrice !== null && (content.coingeckoId || content.yahooSymbol)
+                    ? fmt2(livePrice)
+                    : contextPrice !== null
+                    ? fmt2(contextPrice)
+                    : content.currentValue}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, paddingBottom: "0.2rem" }}>
