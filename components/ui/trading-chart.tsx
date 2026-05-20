@@ -25,6 +25,7 @@ interface TradingChartProps {
   color: string;
   height?: number;
   currentPrice?: number;
+  onPriceLoad?: (price: number) => void;
 }
 
 const cache = new Map<string, { data: ChartPoint[]; exp: number }>();
@@ -48,7 +49,7 @@ function fmtTooltipPrice(v: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 4, maximumFractionDigits: 6 }).format(v);
 }
 
-export function TradingChart({ coingeckoId, staticData, color, height = 280, currentPrice }: TradingChartProps) {
+export function TradingChart({ coingeckoId, staticData, color, height = 280, currentPrice, onPriceLoad }: TradingChartProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const chartDivRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -72,7 +73,11 @@ export function TradingChart({ coingeckoId, staticData, color, height = 280, cur
     setLoading(true);
     setError(null);
     loadCryptoData(coingeckoId)
-      .then(d => { setData(d); setLoading(false); })
+      .then(d => {
+        setData(d);
+        setLoading(false);
+        if (onPriceLoad && d.length > 0) onPriceLoad(d[d.length - 1].value);
+      })
       .catch(e => { setError("Real-time data unavailable"); setLoading(false); });
   }, [coingeckoId]);
 

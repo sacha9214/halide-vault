@@ -268,8 +268,10 @@ function Stat({ label, value, accent }: StatItem) {
 
 export function DetailModal({ data, onClose }: { data: ModalData | null; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { setLivePrice(null); }, [data]);
 
   useEffect(() => {
     if (!data) return;
@@ -344,7 +346,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
                   {content.currentLabel}
                 </div>
                 <div style={{ fontFamily: "monospace", fontSize: "1.9rem", fontWeight: 700, color: content.color, lineHeight: 1 }}>
-                  {content.currentValue}
+                  {livePrice !== null && content.coingeckoId ? fmt2(livePrice) : content.currentValue}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, paddingBottom: "0.2rem" }}>
@@ -380,6 +382,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
                 staticData={content.staticData}
                 color={content.color}
                 height={260}
+                onPriceLoad={setLivePrice}
               />
             </div>
 
