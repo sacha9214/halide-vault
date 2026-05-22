@@ -52,6 +52,7 @@ async function loadCryptoData(id: string): Promise<ChartPoint[]> {
   const res = await fetch(`/api/chart?id=${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(`${res.status}`);
   const data: ChartPoint[] = await res.json();
+  if (!Array.isArray(data) || data.length === 0) throw new Error("empty");
 
   cache.set(id, { data, exp: Date.now() + TTL });
   return data;
