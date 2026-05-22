@@ -25,7 +25,6 @@ interface TradingChartProps {
   staticData?: ChartPoint[];
   color: string;
   height?: number;
-  currentPrice?: number;
   onPriceLoad?: (price: number) => void;
 }
 
@@ -64,7 +63,7 @@ function fmtTooltipPrice(v: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 4, maximumFractionDigits: 6 }).format(v);
 }
 
-export function TradingChart({ coingeckoId, yahooSymbol, staticData, color, height = 280, currentPrice, onPriceLoad }: TradingChartProps) {
+export function TradingChart({ coingeckoId, yahooSymbol, staticData, color, height = 280, onPriceLoad }: TradingChartProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const chartDivRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -97,6 +96,7 @@ export function TradingChart({ coingeckoId, yahooSymbol, staticData, color, heig
       })
       .catch(() => { if (!cancelled) { setError("Real-time data unavailable"); setLoading(false); } });
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coingeckoId]);
 
   // Fetch stock / commodity data from Yahoo Finance
@@ -114,6 +114,7 @@ export function TradingChart({ coingeckoId, yahooSymbol, staticData, color, heig
       })
       .catch(() => { if (!cancelled) { setError("Real-time data unavailable"); setLoading(false); } });
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [yahooSymbol]);
 
   // Build chart
@@ -190,10 +191,10 @@ export function TradingChart({ coingeckoId, yahooSymbol, staticData, color, heig
         scaleMargins: { top: 0.82, bottom: 0 },
         visible: false,
       });
-      vol.setData(data.map(d => ({
+      vol.setData(data.map((d, i) => ({
         time: d.time as `${number}-${number}-${number}`,
         value: d.volume ?? 0,
-        color: d.value >= (data[Math.max(0, data.indexOf(d) - 1)]?.value ?? d.value)
+        color: d.value >= (data[Math.max(0, i - 1)]?.value ?? d.value)
           ? `${color}55`
           : `${color}33`,
       })));

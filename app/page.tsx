@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { VaultGrain } from "@/components/ui/vault-grain";
 import { VaultNavbar, type Tab, TABS } from "@/components/ui/vault-navbar";
@@ -27,16 +27,14 @@ const sections: Record<Tab, React.ReactNode> = {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("Crypto");
-  const dirRef = useRef(0);
+  const [dir, setDir] = useState(0);
 
   const handleTabChange = (tab: Tab) => {
     const prev = TABS.indexOf(activeTab);
     const next = TABS.indexOf(tab);
-    dirRef.current = next > prev ? 1 : -1;
+    setDir(next > prev ? 1 : -1);
     setActiveTab(tab);
   };
-
-  const dir = dirRef.current;
 
   return (
     <motion.div

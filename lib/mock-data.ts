@@ -23,15 +23,6 @@ export interface PokemonCard {
 }
 export interface PokemonFigure { id: string; name: string; size: string; condition: string; value: number; }
 
-// ── Empty portfolio arrays ────────────────────────────────────────────────────
-export const cryptoAssets: CryptoAsset[] = [];
-export const cs2Skins: CS2Skin[] = [];
-export const cs2Cases: CS2Case[] = [];
-export const goldItems: GoldItem[] = [];
-export const pokemonCards: PokemonCard[] = [];
-export const pokemonFigures: PokemonFigure[] = [];
-export const stockAssets: StockAsset[] = [];
-
 // ── Helpers (inline sparkline shorthand) ─────────────────────────────────────
 const sp = (p: number, d: number): number[] => {
   const f = d >= 0 ? [0.91,0.93,0.95,0.97,0.98,0.99,1] : [1.09,1.07,1.05,1.03,1.02,1.01,1];
@@ -633,13 +624,3 @@ export const metalSpotPerGram: Record<string, number> = {
 export const metalColors: Record<string, string> = {
   gold: "#f5c542", silver: "#c0c0c0", platinum: "#e8e8f5", palladium: "#d4c9bc",
 };
-export const goldSpotPerGram = metalSpotPerGram.gold;
-export const goldSpotPerOz = 4541.50;
-
-// ── Totals ────────────────────────────────────────────────────────────────────
-export const cryptoTotal = cryptoAssets.reduce((s, a) => s + a.amount * a.price, 0);
-export const cs2Total = cs2Skins.reduce((s, a) => s + a.price, 0) + cs2Cases.reduce((s, a) => s + a.quantity * a.price, 0);
-export const goldTotal = goldItems.reduce((s, g) => s + g.quantity * g.weightGrams * (metalSpotPerGram[g.metal] || goldSpotPerGram), 0);
-export const pokemonTotal = pokemonCards.reduce((s, c) => s + c.value, 0) + pokemonFigures.reduce((s, f) => s + f.value, 0);
-export const stockTotal = stockAssets.reduce((s, a) => s + a.shares * a.price, 0);
-export const grandTotal = cryptoTotal + cs2Total + goldTotal + pokemonTotal + stockTotal;

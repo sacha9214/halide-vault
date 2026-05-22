@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import {
-  TrendingUp, TrendingDown, AlertTriangle, Zap,
+  TrendingUp, AlertTriangle, Zap,
   ShieldAlert, BarChart2, Activity, Target, Eye,
   Flame, Snowflake, Radio, RefreshCw, ArrowUpRight, ArrowDownRight,
 } from "lucide-react";
@@ -213,8 +213,6 @@ export function VaultAI() {
   const prices = usePrices();
   const { portfolio } = useAuth();
 
-  const spotPrices = { ...metalSpotPerGram, ...prices.metals };
-
   const cryptoTotal = useMemo(() => (portfolio?.cryptoAssets ?? []).reduce((s, a) => {
     const lp = prices.crypto[a.coingeckoId];
     return s + a.amount * (lp?.price ?? a.price);
@@ -225,10 +223,13 @@ export function VaultAI() {
     return s + a.shares * (lp?.price ?? a.price);
   }, 0), [portfolio, prices.stocks]);
 
-  const goldTotal = useMemo(() => (portfolio?.goldItems ?? []).reduce((s, g) => {
-    const spot = spotPrices[g.metal] || metalSpotPerGram[g.metal] || 65.32;
-    return s + g.quantity * g.weightGrams * spot;
-  }, 0), [portfolio, spotPrices]);
+  const goldTotal = useMemo(() => {
+    const spotPrices = { ...metalSpotPerGram, ...prices.metals };
+    return (portfolio?.goldItems ?? []).reduce((s, g) => {
+      const spot = spotPrices[g.metal] || metalSpotPerGram[g.metal] || 65.32;
+      return s + g.quantity * g.weightGrams * spot;
+    }, 0);
+  }, [portfolio, prices.metals]);
 
   const cs2Total = useMemo(() =>
     (portfolio?.cs2Skins ?? []).reduce((s, sk) => s + sk.price, 0) +
@@ -243,7 +244,10 @@ export function VaultAI() {
   const grandTotal = cryptoTotal + stockTotal + goldTotal + cs2Total + pokemonTotal;
   const isEmpty = grandTotal === 0;
 
-  const totals = { crypto: cryptoTotal, stocks: stockTotal, gold: goldTotal, cs2: cs2Total, pokemon: pokemonTotal, grand: grandTotal };
+  const totals = useMemo(
+    () => ({ crypto: cryptoTotal, stocks: stockTotal, gold: goldTotal, cs2: cs2Total, pokemon: pokemonTotal, grand: grandTotal }),
+    [cryptoTotal, stockTotal, goldTotal, cs2Total, pokemonTotal, grandTotal]
+  );
 
   const safe = grandTotal > 0 ? grandTotal : 1;
   const allocs = [

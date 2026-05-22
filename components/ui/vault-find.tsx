@@ -211,7 +211,7 @@ export function VaultFind() {
 
       {!loading && query && !hasResults && (
         <div style={{ textAlign: "center", padding: "2rem", fontFamily: "monospace", fontSize: "0.62rem", color: "rgba(224,224,224,0.25)", letterSpacing: "0.14em" }}>
-          NO RESULTS FOR "{query.toUpperCase()}"
+          NO RESULTS FOR &ldquo;{query.toUpperCase()}&rdquo;
         </div>
       )}
 

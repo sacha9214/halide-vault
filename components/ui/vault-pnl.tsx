@@ -32,9 +32,9 @@ export function VaultPnL() {
   const { portfolio } = useAuth();
   const { crypto: liveCrypto, stocks: liveStocks, metals: liveMetals } = usePrices();
   const [sort, setSort] = useState<SortKey>("value");
-  const spotPrices = { ...metalSpotPerGram, ...liveMetals };
 
   const rows = useMemo<Row[]>(() => {
+    const spotPrices = { ...metalSpotPerGram, ...liveMetals };
     const result: Row[] = [];
 
     for (const a of portfolio?.cryptoAssets ?? []) {
@@ -110,7 +110,7 @@ export function VaultPnL() {
       if (sort === "change1d") return (b.change1d ?? 0) - (a.change1d ?? 0);
       return b.currentValue - a.currentValue;
     });
-  }, [portfolio, liveCrypto, liveStocks, spotPrices, sort]);
+  }, [portfolio, liveCrypto, liveStocks, liveMetals, sort]);
 
   const totalCurrentValue = rows.reduce((s, r) => s + r.currentValue, 0);
   const tracked = rows.filter(r => r.costBasis !== null);

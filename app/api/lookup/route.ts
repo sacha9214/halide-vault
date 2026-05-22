@@ -64,19 +64,31 @@ async function searchStocks(q: string) {
       .slice(0, 6);
     if (equities.length === 0) return [];
 
-    const symbols = equities.map(e => e.symbol).join(",");
-    const quotesRaw = await nodeGet(
-      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketChangePercent`,
-      { Accept: "application/json", Referer: "https://finance.yahoo.com/" }
-    );
-    const quotesData = JSON.parse(quotesRaw) as {
-      quoteResponse?: {
-        result?: Array<{ symbol: string; regularMarketPrice: number; regularMarketChangePercent: number }>;
-      };
-    };
+    // Yahoo's v7/finance/quote endpoint now requires a crumb+cookie and returns 401
+    // for anonymous requests. The v8/finance/chart endpoint still works without auth
+    // and exposes the current price + previous close in its `meta` block, so we fetch
+    // each symbol's chart in parallel and derive the quote from there.
     const priceMap: Record<string, { price: number; change1d: number }> = {};
-    for (const item of quotesData.quoteResponse?.result ?? []) {
-      priceMap[item.symbol] = { price: item.regularMarketPrice, change1d: item.regularMarketChangePercent };
+    const quoteResults = await Promise.allSettled(
+      equities.map(async (e) => {
+        const raw = await nodeGet(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(e.symbol)}?interval=1d&range=2d`,
+          { Accept: "application/json", Referer: "https://finance.yahoo.com/" }
+        );
+        const meta = (JSON.parse(raw) as {
+          chart?: { result?: Array<{ meta?: { regularMarketPrice?: number; chartPreviousClose?: number; previousClose?: number } }> };
+        })?.chart?.result?.[0]?.meta;
+        const price = meta?.regularMarketPrice;
+        if (typeof price !== "number") return null;
+        const prevClose = meta?.chartPreviousClose ?? meta?.previousClose;
+        const change1d = typeof prevClose === "number" && prevClose > 0
+          ? ((price - prevClose) / prevClose) * 100
+          : 0;
+        return [e.symbol, { price, change1d }] as const;
+      })
+    );
+    for (const r of quoteResults) {
+      if (r.status === "fulfilled" && r.value) priceMap[r.value[0]] = r.value[1];
     }
 
     return equities.map(e => ({

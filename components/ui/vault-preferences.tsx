@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Settings, LogIn, LogOut, User } from "lucide-react";
+import { Settings, LogOut, User } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
 export function VaultPreferences() {

@@ -95,17 +95,50 @@ async function fetchMetals(): Promise<Record<string, number>> {
   );
 }
 
-export async function GET() {
+// Short-lived in-memory cache, shared across requests handled by the same
+// serverless instance. Many clients polling every 60s would otherwise each
+// trigger fresh upstream calls and quickly exhaust CoinGecko's free-tier rate
+// limit. A 30s TTL keeps prices fresh while collapsing bursts into one fetch.
+type PricesPayload = {
+  crypto: Record<string, { price: number; change24h: number }>;
+  stocks: Record<string, { price: number; change1d: number }>;
+  metals: Record<string, number>;
+  timestamp: number;
+};
+const CACHE_TTL = 30_000;
+let cached: { payload: PricesPayload; exp: number } | null = null;
+let inflight: Promise<PricesPayload> | null = null;
+
+async function buildPayload(): Promise<PricesPayload> {
   const [cryptoRes, stocksRes, metalsRes] = await Promise.allSettled([
     fetchCryptoPrices(),
     fetchStocks(),
     fetchMetals(),
   ]);
 
-  return Response.json({
+  return {
     crypto: cryptoRes.status === "fulfilled" ? cryptoRes.value : {},
     stocks: stocksRes.status === "fulfilled" ? stocksRes.value : {},
     metals: metalsRes.status === "fulfilled" ? metalsRes.value : {},
     timestamp: Date.now(),
+  };
+}
+
+export async function GET() {
+  if (cached && Date.now() < cached.exp) {
+    return Response.json(cached.payload);
+  }
+  // Collapse concurrent requests into a single upstream fetch.
+  if (!inflight) {
+    inflight = buildPayload()
+      .then((payload) => {
+        cached = { payload, exp: Date.now() + CACHE_TTL };
+        return payload;
+      })
+      .finally(() => { inflight = null; });
+  }
+  const payload = await inflight;
+  return Response.json(payload, {
+    headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=30" },
   });
 }
