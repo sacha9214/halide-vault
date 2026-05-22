@@ -292,6 +292,19 @@ function Stat({ label, value, accent }: StatItem) {
   );
 }
 
+function modalKey(data: ModalData | null): string {
+  if (!data) return "closed";
+  switch (data.kind) {
+    case "crypto":   return `crypto-${data.asset.coingeckoId}`;
+    case "stock":    return `stock-${data.stock.ticker}`;
+    case "cs2skin":  return `cs2skin-${data.skin.weaponName}-${data.skin.skinName}-${data.skin.wear}`;
+    case "cs2case":  return `cs2case-${data.cs2case.name}`;
+    case "gold":     return `gold-${data.item.name}`;
+    case "pokemon-card":   return `pkcard-${data.card.name}`;
+    case "pokemon-figure": return `pkfig-${data.figure.name}`;
+  }
+}
+
 export function DetailModal({ data, onClose }: { data: ModalData | null; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
   const [livePrice, setLivePrice] = useState<number | null>(null);
@@ -334,7 +347,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
     <AnimatePresence>
       {data && content && (
         <motion.div
-          key="vault-detail-overlay"
+          key={modalKey(data)}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
