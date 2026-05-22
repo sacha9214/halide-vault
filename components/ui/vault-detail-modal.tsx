@@ -344,7 +344,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
   const content = data ? buildContent(data, steamPrice ?? undefined) : null;
 
   const modal = (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {data && content && (
         <motion.div
           key={modalKey(data)}
@@ -446,7 +446,7 @@ export function DetailModal({ data, onClose }: { data: ModalData | null; onClose
                 : "30D PRICE ESTIMATE · SCROLL TO ZOOM"}
               </div>
               <TradingChart
-                key={content.title + content.subtitle}
+                key={modalKey(data)}
                 coingeckoId={content.coingeckoId}
                 yahooSymbol={content.yahooSymbol}
                 staticData={content.staticData}
